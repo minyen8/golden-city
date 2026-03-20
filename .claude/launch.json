@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "golden-city-dev",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["start-dev.sh"],
+      "port": 5174,
+      "cwd": "C:/TempClaude/golden-city/project-modified"
+    }
+  ]
+}
