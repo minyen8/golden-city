@@ -61,6 +61,30 @@ const MENU_PRICES: Record<string, number> = {
 
 const MINIMUM_ORDER = 8.0; // £8.00 minimum
 
+// In-memory order store for pay-on-arrival orders
+interface Order {
+  orderId: string;
+  items: { name: string; quantity: number }[];
+  total: number;
+  customerName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  postcode: string;
+  notes: string;
+  orderType: "pickup" | "delivery";
+  paymentMethod: "on-arrival";
+  createdAt: Date;
+}
+
+const orders: Map<string, Order> = new Map();
+
+// Generate unique order ID
+function generateOrderId(): string {
+  return Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 7).toUpperCase();
+}
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
@@ -143,6 +167,66 @@ async function startServer() {
       console.error("Stripe PaymentIntent error:", err);
       res.status(500).json({ error: "Failed to create payment. Please try again." });
     }
+  });
+
+  // Create a pay-on-arrival order (no Stripe payment)
+  app.post("/api/create-order", async (req, res) => {
+    const { items, name, email, phone, address, city, postcode, notes, orderType } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ error: "Cart is empty." });
+      return;
+    }
+
+    // Validate every item against the server-side price list
+    let total = 0;
+    for (const item of items) {
+      const serverPrice = MENU_PRICES[item.name];
+      if (serverPrice === undefined) {
+        res.status(400).json({ error: `Unknown menu item: "${item.name}"` });
+        return;
+      }
+      const qty = Number(item.quantity);
+      if (!Number.isInteger(qty) || qty < 1) {
+        res.status(400).json({ error: `Invalid quantity for "${item.name}"` });
+        return;
+      }
+      total += serverPrice * qty;
+    }
+
+    if (total < MINIMUM_ORDER) {
+      res.status(400).json({ error: `Minimum order is £${MINIMUM_ORDER.toFixed(2)}.` });
+      return;
+    }
+
+    // Generate unique order ID
+    const orderId = generateOrderId();
+
+    // Create order record
+    const order: Order = {
+      orderId,
+      items: items.map((i: { name: string; quantity: number }) => ({
+        name: i.name,
+        qty: i.quantity,
+      })) as any,
+      total,
+      customerName: String(name || ""),
+      email: String(email || ""),
+      phone: String(phone || ""),
+      address: String(address || ""),
+      city: String(city || ""),
+      postcode: String(postcode || ""),
+      notes: String(notes || "").slice(0, 500),
+      orderType: orderType as "pickup" | "delivery",
+      paymentMethod: "on-arrival",
+      createdAt: new Date(),
+    };
+
+    // Store order in memory
+    orders.set(orderId, order);
+    console.log(`Order created: ${orderId} - £${total.toFixed(2)} - ${orderType} - pay on ${orderType}`);
+
+    res.json({ orderId });
   });
 
   // Serve static files from dist/public in production

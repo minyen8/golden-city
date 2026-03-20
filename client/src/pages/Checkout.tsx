@@ -34,6 +34,8 @@ export default function Checkout() {
   const [city, setCity] = useState("");
   const [postcode, setPostcode] = useState("");
   const [notes, setNotes] = useState("");
+  const [orderType, setOrderType] = useState<"pickup" | "delivery">("pickup");
+  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "on-arrival">("stripe");
 
   const [status, setStatus] = useState<CheckoutStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -92,8 +94,18 @@ export default function Checkout() {
       setStatus("error");
       return;
     }
-    if (!name.trim() || !email.trim() || !postcode.trim()) {
-      setErrorMessage("Please fill in your name, email, and postcode.");
+    if (!name.trim() || !email.trim()) {
+      setErrorMessage("Please fill in your name and email.");
+      setStatus("error");
+      return;
+    }
+    if (orderType === "delivery" && !address.trim()) {
+      setErrorMessage("Please fill in your delivery address.");
+      setStatus("error");
+      return;
+    }
+    if (orderType === "delivery" && !postcode.trim()) {
+      setErrorMessage("Please fill in your postcode.");
       setStatus("error");
       return;
     }
@@ -107,7 +119,35 @@ export default function Checkout() {
     setErrorMessage("");
 
     try {
-      // 1. Ask the server to create a PaymentIntent with server-validated prices
+      // If paying on arrival, skip Stripe
+      if (paymentMethod === "on-arrival") {
+        const res = await fetch("/api/create-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: items.map((i) => ({ name: i.name, quantity: i.quantity })),
+            name,
+            email,
+            phone,
+            address: orderType === "delivery" ? address : "",
+            city: orderType === "delivery" ? city : "",
+            postcode: orderType === "delivery" ? postcode : "",
+            notes,
+            orderType,
+            paymentMethod: "on-arrival",
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to create order.");
+
+        setOrderRef(data.orderId);
+        setStatus("success");
+        clearCart();
+        return;
+      }
+
+      // Otherwise, use Stripe payment
       const res = await fetch("/api/create-payment-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -116,10 +156,12 @@ export default function Checkout() {
           name,
           email,
           phone,
-          address,
-          city,
-          postcode,
+          address: orderType === "delivery" ? address : "",
+          city: orderType === "delivery" ? city : "",
+          postcode: orderType === "delivery" ? postcode : "",
           notes,
+          orderType,
+          paymentMethod: "stripe",
         }),
       });
 
@@ -129,7 +171,7 @@ export default function Checkout() {
         throw new Error(data.error || "Failed to create payment intent.");
       }
 
-      // 2. Confirm the card payment with Stripe
+      // Confirm the card payment with Stripe
       const result = await stripeRef.current.confirmCardPayment(data.clientSecret, {
         payment_method: {
           card: cardElementRef.current,
@@ -141,7 +183,7 @@ export default function Checkout() {
         throw new Error(result.error.message || "Payment failed.");
       }
 
-      // 3. Success
+      // Success
       const ref = result.paymentIntent?.id?.slice(-8).toUpperCase() || "OK";
       setOrderRef(ref);
       setStatus("success");
@@ -172,16 +214,23 @@ export default function Checkout() {
               Order Placed!
             </h1>
             <p className="text-cream/60 mb-2">
-              Thank you, your order has been received. We'll have it ready for
-              collection shortly.
+              Thank you, your order has been received.
+              {orderType === "pickup"
+                ? " We'll have it ready for collection shortly."
+                : " We'll deliver it to your address."}
             </p>
+            {paymentMethod === "on-arrival" && (
+              <p className="text-coral text-sm font-medium mb-2">
+                💳 Payment due on {orderType === "pickup" ? "pickup" : "delivery"}
+              </p>
+            )}
             {orderRef && (
               <p className="text-cream/50 text-sm mb-1">
                 Order ref: <span className="font-mono font-bold text-cream">{orderRef}</span>
               </p>
             )}
             <p className="text-amber text-sm font-medium mb-8">
-              A confirmation receipt will be sent to {email}
+              A confirmation email will be sent to {email}
             </p>
             <div className="p-4 rounded-xl bg-card border border-border text-sm text-cream/60 mb-4">
               <p className="font-medium text-cream mb-1">Delivery Address</p>
@@ -230,7 +279,7 @@ export default function Checkout() {
               <span className="text-gradient-gold">Checkout</span>
             </h1>
             <p className="text-cream/50 text-sm mt-1">
-              Collection only · Golden City, Trench, Telford
+              Golden City, Trench, Telford
             </p>
           </div>
 
@@ -277,6 +326,41 @@ export default function Checkout() {
                 <span className="font-heading font-bold text-xl text-amber">
                   £{totalPrice.toFixed(2)}
                 </span>
+              </div>
+            </div>
+
+            {/* Order Type */}
+            <div className="p-5 rounded-2xl bg-card border border-border space-y-4">
+              <h2 className="font-heading font-semibold text-cream mb-3">
+                Order Type
+              </h2>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    value="pickup"
+                    checked={orderType === "pickup"}
+                    onChange={(e) => {
+                      setOrderType(e.target.value as "pickup" | "delivery");
+                      setPaymentMethod("stripe");
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-cream">Pickup</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    value="delivery"
+                    checked={orderType === "delivery"}
+                    onChange={(e) => {
+                      setOrderType(e.target.value as "pickup" | "delivery");
+                      setPaymentMethod("stripe");
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-cream">Delivery</span>
+                </label>
               </div>
             </div>
 
@@ -327,48 +411,52 @@ export default function Checkout() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
-                  Delivery Address *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="123 High Street"
-                  className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
-                />
-              </div>
+              {orderType === "delivery" && (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
+                      Delivery Address *
+                    </label>
+                    <input
+                      type="text"
+                      required={orderType === "delivery"}
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      placeholder="123 High Street"
+                      className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
-                    City *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="Telford"
-                    className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
-                    Postcode *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={postcode}
-                    onChange={(e) => setPostcode(e.target.value)}
-                    placeholder="TF2 6RX"
-                    className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
+                        City *
+                      </label>
+                      <input
+                        type="text"
+                        required={orderType === "delivery"}
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        placeholder="Telford"
+                        className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
+                        Postcode *
+                      </label>
+                      <input
+                        type="text"
+                        required={orderType === "delivery"}
+                        value={postcode}
+                        onChange={(e) => setPostcode(e.target.value)}
+                        placeholder="TF2 6RX"
+                        className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div>
                 <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
@@ -384,30 +472,73 @@ export default function Checkout() {
               </div>
             </div>
 
-            {/* Payment */}
-            <div className="p-5 rounded-2xl bg-card border border-border space-y-4">
-              <div className="flex items-center gap-2">
-                <Lock className="w-4 h-4 text-amber" />
-                <h2 className="font-heading font-semibold text-cream">
-                  Payment
+            {/* Payment Method */}
+            {orderType === "pickup" && (
+              <div className="p-5 rounded-2xl bg-card border border-border space-y-4">
+                <h2 className="font-heading font-semibold text-cream mb-3">
+                  Payment Method
                 </h2>
-                <span className="ml-auto text-xs text-cream/30">
-                  Secured by Stripe
-                </span>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      value="stripe"
+                      checked={paymentMethod === "stripe"}
+                      onChange={(e) => setPaymentMethod(e.target.value as "stripe" | "on-arrival")}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-cream">Pay with Card (Stripe)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      value="on-arrival"
+                      checked={paymentMethod === "on-arrival"}
+                      onChange={(e) => setPaymentMethod(e.target.value as "stripe" | "on-arrival")}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-cream">Pay at Pickup</span>
+                  </label>
+                </div>
               </div>
+            )}
+            {orderType === "delivery" && (
+              <div className="p-5 rounded-2xl bg-card border border-border space-y-2">
+                <h2 className="font-heading font-semibold text-cream mb-3">
+                  Payment Method
+                </h2>
+                <p className="text-cream/70 text-sm">
+                  Delivery orders must be paid by card.
+                </p>
+              </div>
+            )}
 
-              {/* Stripe Card Element mount point */}
-              <div
-                ref={cardMountRef}
-                className="px-4 py-3.5 rounded-lg bg-background border border-border min-h-[44px]"
-              />
+            {/* Stripe Payment (conditional) */}
+            {paymentMethod === "stripe" && (
+              <div className="p-5 rounded-2xl bg-card border border-border space-y-4">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-amber" />
+                  <h2 className="font-heading font-semibold text-cream">
+                    Card Details
+                  </h2>
+                  <span className="ml-auto text-xs text-cream/30">
+                    Secured by Stripe
+                  </span>
+                </div>
 
-              <p className="text-xs text-cream/30 flex items-center gap-1.5">
-                <Lock className="w-3 h-3" />
-                Your payment details are encrypted and never stored on our
-                servers.
-              </p>
-            </div>
+                {/* Stripe Card Element mount point */}
+                <div
+                  ref={cardMountRef}
+                  className="px-4 py-3.5 rounded-lg bg-background border border-border min-h-[44px]"
+                />
+
+                <p className="text-xs text-cream/30 flex items-center gap-1.5">
+                  <Lock className="w-3 h-3" />
+                  Your payment details are encrypted and never stored on our
+                  servers.
+                </p>
+              </div>
+            )}
 
             {/* Error */}
             {status === "error" && errorMessage && (
@@ -430,12 +561,20 @@ export default function Checkout() {
               {status === "loading" ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing payment…
+                  {paymentMethod === "stripe"
+                    ? "Processing payment…"
+                    : "Creating order…"}
                 </>
               ) : (
                 <>
-                  <Lock className="w-4 h-4" />
-                  Pay £{totalPrice.toFixed(2)} securely
+                  {paymentMethod === "stripe" ? (
+                    <>
+                      <Lock className="w-4 h-4" />
+                      Pay £{totalPrice.toFixed(2)} securely
+                    </>
+                  ) : (
+                    <>Place Order - Pay on {orderType === "pickup" ? "Pickup" : "Delivery"}</>
+                  )}
                 </>
               )}
             </button>
