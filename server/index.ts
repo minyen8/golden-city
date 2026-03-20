@@ -88,7 +88,7 @@ async function startServer() {
       return;
     }
 
-    const { items, name, email, phone, notes } = req.body;
+    const { items, name, email, phone, address, city, postcode, notes } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       res.status(400).json({ error: "Cart is empty." });
@@ -124,6 +124,9 @@ async function startServer() {
           customerName: String(name || ""),
           email: String(email || ""),
           phone: String(phone || ""),
+          address: String(address || ""),
+          city: String(city || ""),
+          postcode: String(postcode || ""),
           notes: String(notes || "").slice(0, 500),
           items: JSON.stringify(
             items.map((i: { name: string; quantity: number }) => ({

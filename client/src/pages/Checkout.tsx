@@ -30,6 +30,9 @@ export default function Checkout() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [postcode, setPostcode] = useState("");
   const [notes, setNotes] = useState("");
 
   const [status, setStatus] = useState<CheckoutStatus>("idle");
@@ -89,8 +92,8 @@ export default function Checkout() {
       setStatus("error");
       return;
     }
-    if (!name.trim() || !email.trim()) {
-      setErrorMessage("Please fill in your name and email.");
+    if (!name.trim() || !email.trim() || !postcode.trim()) {
+      setErrorMessage("Please fill in your name, email, and postcode.");
       setStatus("error");
       return;
     }
@@ -113,6 +116,9 @@ export default function Checkout() {
           name,
           email,
           phone,
+          address,
+          city,
+          postcode,
           notes,
         }),
       });
@@ -177,6 +183,14 @@ export default function Checkout() {
             <p className="text-amber text-sm font-medium mb-8">
               A confirmation receipt will be sent to {email}
             </p>
+            <div className="p-4 rounded-xl bg-card border border-border text-sm text-cream/60 mb-4">
+              <p className="font-medium text-cream mb-1">Delivery Address</p>
+              <p>
+                {address}
+                <br />
+                {city} {postcode}
+              </p>
+            </div>
             <div className="p-4 rounded-xl bg-card border border-border text-sm text-cream/60 mb-8">
               <p className="font-medium text-cream mb-1">
                 Golden City Chinese Take Away
@@ -272,32 +286,18 @@ export default function Checkout() {
                 Your Details
               </h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
-                    Full Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Jane Smith"
-                    className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="07700 900000"
-                    className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Jane Smith"
+                  className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
+                />
               </div>
 
               <div>
@@ -312,6 +312,62 @@ export default function Checkout() {
                   placeholder="jane@example.com"
                   className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="07700 900000"
+                  className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
+                  Delivery Address *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="123 High Street"
+                  className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
+                    City *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="Telford"
+                    className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-cream/50 mb-1.5 uppercase tracking-wider">
+                    Postcode *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={postcode}
+                    onChange={(e) => setPostcode(e.target.value)}
+                    placeholder="TF2 6RX"
+                    className="w-full px-4 py-2.5 rounded-lg bg-background border border-border text-cream placeholder-cream/25 text-sm focus:outline-none focus:border-amber transition-colors"
+                  />
+                </div>
               </div>
 
               <div>
